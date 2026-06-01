@@ -8,8 +8,8 @@ from nav_msgs.msg import Odometry
 from std_msgs.msg import Float64
 from action_msgs.msg import GoalStatus
 
-GRID_SIZE_X = 5.0
-GRID_SIZE_Y = 5.0
+GRID_SIZE_X = 3.0
+GRID_SIZE_Y = 3.0
 
 class PathFindNode(Node):
     grid: grid_model.MapModel
@@ -22,15 +22,19 @@ class PathFindNode(Node):
     current_goal: tuple[float, float]
     goal_active: bool
     odom_published: bool
+    ph_published: bool
+    scan_finished: bool
 
     def __init__(self):
         super().__init__('path_find_node')
         self.get_logger().info('Constructing Path finding node')
 
-        self.grid = grid_model.MapModel(5, 5)
+        self.grid = grid_model.MapModel(GRID_SIZE_X, GRID_SIZE_Y)
         self.goal_active = False
         self.latest_ph = 0
+        self.ph_published = False
         self.odom_published = False
+        self.scan_finished = False
 
         self.odom_sub = self.create_subscription(
             Odometry,
@@ -57,9 +61,14 @@ class PathFindNode(Node):
         self.get_logger().info('Path finding node operational')
 
     def ph_callback(self, ph: Float64):
+        if self.scan_finished:
+            return
         self.latest_ph = ph.data
+        self.ph_published = True
 
     def odom_callback(self, msg:Odometry):
+        if self.scan_finished:
+            return
         self.odom_published = True
         x = msg.pose.pose.position.x
         y = msg.pose.pose.position.y
@@ -74,7 +83,7 @@ class PathFindNode(Node):
         self.send_goal()
 
     def send_goal(self):
-        if not self.odom_published:
+        if not self.odom_published or not self.ph_published or self.scan_finished:
             return
         goal_msg = NavigateToPose.Goal()
 
@@ -82,6 +91,10 @@ class PathFindNode(Node):
         goal_msg.pose.header.stamp = self.get_clock().now().to_msg()
 
         self.current_goal = self.grid.get_closest_sample_location(self.latest_x, self.latest_y)
+
+        if self.current_goal == (0, 0):
+            self.scan_finished = True
+            self.save_map()
 
         goal_msg.pose.pose.position.x = float(self.current_goal[0])
         goal_msg.pose.pose.position.y = float(self.current_goal[1])
@@ -110,8 +123,8 @@ class PathFindNode(Node):
 
         if status == GoalStatus.STATUS_SUCCEEDED:
             self.get_logger().info('Navigation complete')
-            if not self.grid.location_measured(self.latest_x, self.latest_y):
-                self.grid.mark_location_unreachable(self.latest_x, self.latest_y)
+            if not self.grid.location_measured(self.current_goal[0], self.current_goal[1]):
+                self.grid.mark_location_unreachable(self.current_goal[0], self.current_goal[1])
 
 
         elif status == GoalStatus.STATUS_ABORTED:
@@ -120,6 +133,10 @@ class PathFindNode(Node):
 
         self.goal_active = False
         self.send_goal()
+
+    def save_map(self):
+        #todo
+        return
 
 
 def main(args=None):

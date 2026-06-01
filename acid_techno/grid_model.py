@@ -2,7 +2,7 @@ from collections import deque
 
 class GridSquare:
     # each grid square is 10x10cm
-    DIMENSION: float = 0.5
+    DIMENSION: float = 0.3
     x: float = 0
     y: float = 0
     ph_sample: float = 0
@@ -56,14 +56,17 @@ class MapModel:
         indices = self.get_relative_square(x, y);
         row = indices[0]
         col = indices[1]
-        self.grid[row][col].accessible = False
+        if self.in_bounds(row, col):
+            self.grid[row][col].accessible = False
 
     # Returns whether a particular location already has a sample taken from it
     def location_measured(self, x: float, y: float) -> bool:
         indices = self.get_relative_square(x, y);
         row = indices[0]
         col = indices[1]
-        return self.grid[row][col].measured
+        if self.in_bounds(row, col):
+            return self.grid[row][col].measured
+        return True
 
     # Get location that is relative to the starting point based on grid square
     def get_relative_location(self, row: int, col: int) -> tuple[float, float]:
@@ -101,8 +104,15 @@ class MapModel:
 
     def grid_free_bfs(self, start_row, start_col) -> tuple[int, int] | None:
         queue = deque()
-        queue.append((start_row, start_col))
-        self.grid[start_row][start_col].bfs_searched = True
+        if self.in_bounds(start_row, start_col):
+            queue.append((start_row, start_col))
+            self.grid[start_row][start_col].bfs_searched = True
+        else:
+            loc = self.get_unexplored_square()
+            if loc is None:
+                return None
+            queue.append((loc[0], loc[1]))
+            self.grid[loc[0]][loc[1]].bfs_searched = True
 
         while queue:
             row, col = queue.popleft()
@@ -125,3 +135,12 @@ class MapModel:
         for x in range(0, cols):
             for y in range(0, rows):
                 self.grid[y][x].bfs_searched = False
+
+    def get_unexplored_square(self) -> tuple[int, int] | None:
+        rows = int(self.size_y / GridSquare.DIMENSION)
+        cols = int(self.size_x / GridSquare.DIMENSION)
+        for x in range(0, cols):
+            for y in range(0, rows):
+                if not self.grid[y][x].measured and self.grid[y][x].accessible:
+                    return (y, x)
+        return None
