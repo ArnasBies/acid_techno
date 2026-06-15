@@ -124,6 +124,7 @@ class MapModel:
         self.reset_squares()
         # If there is no more free squares return to the strating point
         if location is None:
+            self.map_is_complete = True
             return (0, 0)
 
         return self.get_relative_nav_location(location[0], location[1])
