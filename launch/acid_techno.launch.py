@@ -8,34 +8,34 @@ def generate_launch_description():
             executable='corrected_odom_node',
             name='corrected_odom_node',
             output='screen',
-            parameters=[{'use_sim_time': True}]
+            parameters=[{'use_sim_time': False}]
         ),
         Node(
             package='acid_techno',
             executable='gui_node',
             name='gui_node',
             output='screen',
-            parameters=[{'use_sim_time': True}]
+            parameters=[{'use_sim_time': False}]
         ),
         Node(
             package='acid_techno',
             executable='read_acidity_node',
             name='read_acidity_node',
             output='screen',
-            parameters=[{'use_sim_time': True}]
+            parameters=[{'use_sim_time': False}]
         ),
         Node(
             package='acid_techno',
             executable='temperature_node',
             name='temperature_node',
             output='screen',
-            parameters=[{'use_sim_time': True}]
+            parameters=[{'use_sim_time': False}]
         ),
         Node(
             package='acid_techno',
             executable='navigation_node',
             name='navigation_node',
             output='screen',
-            parameters=[{'use_sim_time': True}]
+            parameters=[{'use_sim_time': False}]
         ),
     ])

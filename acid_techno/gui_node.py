@@ -1,3 +1,4 @@
+from math import sqrt
 import sys
 from collections import deque
 from dataclasses import dataclass
@@ -16,6 +17,7 @@ from scipy.interpolate import RBFInterpolator
 from std_msgs.msg import Float64
 from std_msgs.msg import Bool
 from std_msgs.msg import Float64MultiArray
+from sensor_msgs.msg import BatteryState
 
 # Switch to the Qt5-compatible Matplotlib backend
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -139,12 +141,16 @@ class GuiNode(Node):
     def __init__(self):
         super().__init__('gui_node')
 
+        self.low_battery = False
         self.latest_ph: float | None = None
         self.latest_x: float | None = None
         self.latest_y: float | None = None
         self.latest_w: float | None = None
         self.latest_temperature: float | None = None
+        self.total_distance = 0.0
         self.latest_heater_on: bool | None = None
+        self.latest_battery_percentage: float | None = None
+        self.initial_battery_percentage: float | None = None
         self.temperature_sample_index = 0
         self.temperature_samples: deque[int] = deque(maxlen=100)
         self.temperature_values: deque[float] = deque(maxlen=100)
@@ -158,6 +164,7 @@ class GuiNode(Node):
 
         self.create_subscription(Float64, '/acidity', self.acidity_callback, 10)
         #self.create_subscription(Odometry, '/odom', self.odom_callback, 10)
+        self.create_subscription(BatteryState, '/battery_state', self.battery_callback, 10)
         self.sub = self.create_subscription(
             Pose2D,
             '/corrected_odom',
@@ -175,11 +182,25 @@ class GuiNode(Node):
         self.nav_state_pub = self.create_publisher(Float64MultiArray, '/nav_state', 10)  # ✅ new
         self.send_goal()
 
+    def battery_callback(self, message: BatteryState):
+        if message.percentage >= 0:
+            self.latest_battery_percentage = float(message.percentage) * 100.0
+        if self.initial_battery_percentage is None:
+            self.initial_battery_percentage = self.latest_battery_percentage
+
     def send_goal(self):
         if self.latest_x is None or self.latest_y is None or self.latest_w is None:
             return
 
+
         self.current_goal = self.map.get_closest_sample_location(self.latest_x, self.latest_y)
+
+        # if the projected return distance times 3 is lower than current return distance, then start returning
+        if self.initial_battery_percentage is not None and self.total_distance is not None and self.latest_battery_percentage is not None:
+            discharge_rate = (self.total_distance / (self.initial_battery_percentage - self.latest_battery_percentage))
+            if (self.latest_battery_percentage * discharge_rate) * 3 < sqrt(pow(self.latest_x, 2) + pow(self.latest_y, 2)):
+                self.current_goal = (0.0, 0.0)
+                self.low_battery = True
 
         pose_msg = PoseStamped()
         pose_msg.header.frame_id = 'map'
@@ -218,6 +239,8 @@ class GuiNode(Node):
         # self.latest_x = float(message.pose.pose.position.x)
         # self.latest_y = float(message.pose.pose.position.y)
         # self.latest_w = float(message.pose.pose.orientation.w)
+        if self.latest_x is not None and self.latest_y is not None:
+            self.total_distance += sqrt(pow(self.latest_x - message.x, 2) + pow(self.latest_y - message.y, 2))
         self.latest_x = float(message.x)
         self.latest_y = float(message.y)
         self.latest_w = float(message.theta)
@@ -289,6 +312,7 @@ class MappingWindow(QMainWindow):
         self.node = node
         self.acidity_colorbar = None
         self.grid_colorbar = None
+        self.battery_state = 0.0
 
         self.setWindowTitle('Acid Techno Mapping GUI')
 
@@ -319,10 +343,12 @@ class MappingWindow(QMainWindow):
         robot_layout.setVerticalSpacing(6)
         self.x_label = QLabel('Robot x: waiting for data')
         self.y_label = QLabel('Robot y: waiting for data')
+        self.battery_label = QLabel('Battery status: waiting for data')
         self.scan_label = QLabel('Scan status: waiting for data')
         robot_layout.addWidget(self.x_label, 0, 0)
         robot_layout.addWidget(self.y_label, 1, 0)
         robot_layout.addWidget(self.scan_label, 2, 0)
+        robot_layout.addWidget(self.battery_label, 3, 0)
 
         grid_box = QGroupBox('Grid status')
         grid_layout = QGridLayout(grid_box)
@@ -384,6 +410,12 @@ class MappingWindow(QMainWindow):
         self.redraw()
 
     def refresh_labels(self):
+        if self.node.latest_battery_percentage is not None:
+            self.battery_label.setText(f'Battery status: {self.node.latest_battery_percentage:.1f}%)')
+        elif self.node.low_battery:
+            self.battery_label.setText('Battery low, returning to starting point')
+        else:
+            self.battery_label.setText('Battery status: waiting for data')
         if self.node.latest_ph is None:
             self.ph_label.setText('Current pH: waiting for data')
         else:
