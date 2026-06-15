@@ -36,8 +36,8 @@ from PyQt5.QtWidgets import (
     QWidget
 )
 
-MAP_SIZE_X = 15.0
-MAP_SIZE_Y = 15.0
+MAP_SIZE_X = 3.0
+MAP_SIZE_Y = 3.0
 PH_MIN = 6.0
 PH_MAX = 9.0
 TEMPERATURE_GRAPH_Y_MIN = 0.0
