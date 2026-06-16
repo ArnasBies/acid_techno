@@ -313,6 +313,7 @@ class MappingWindow(QMainWindow):
         self.acidity_colorbar = None
         self.grid_colorbar = None
         self.battery_state = 0.0
+        self.saved = False
 
         self.setWindowTitle('Acid Techno Mapping GUI')
 
@@ -536,6 +537,9 @@ class MappingWindow(QMainWindow):
 
         if self.node.latest_x is not None and self.node.latest_y is not None:
             axis.scatter([self.node.latest_x], [self.node.latest_y], c='black', s=40, marker='o', edgecolors='white', linewidths=0.8)
+        if self.node.map.map_is_complete and not self.saved:
+            self.figure.savefig('acidity_map.png', dpi=150, bbox_inches='tight')
+            self.saved = True
 
     def draw_grid_map(self, axis):
         assert self.node.nav_state is not None
